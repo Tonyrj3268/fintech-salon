@@ -3,6 +3,10 @@ import asyncio
 import aiohttp
 import os
 import openai
+import re
+
+OPENAI_MODEL = "gpt-4-1106-preview"
+# OPENAI_MODEL = "gpt-3.5-turbo-1106"
 
 
 async def get_esg_from_bing_news(
@@ -97,14 +101,13 @@ def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
     response = openai.chat.completions.create(
-        # model="gpt-4-1106-preview",
-        model="gpt-3.5-turbo-1106",
+        model=OPENAI_MODEL,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": "Assistant is a ESG professional."},
             {
                 "role": "user",
-                "content": f"Here are some news titles. Please identify which ones are related to ESG (Environmental, Social, and Governance) or Sustainable, and the title must related to {company_name}.",
+                "content": f"Here are some news titles. Please identify which ones are related to ESG (Environmental, Social, and Governance) or Sustainable, and the title must have {company_name}.",
             },
             {"role": "assistant", "content": "Please provide the news titles."},
             {
@@ -114,7 +117,7 @@ def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
             {"role": "assistant", "content": "I will start to identify and analyze."},
             {
                 "role": "user",
-                "content": f"Give me the json of titles for ESG relevance related to {company_name} and exclude the title without {company_name} relevance. The returned json's key has been named 'titles'",
+                "content": f"Give me the json of titles for ESG relevance and must have {company_name}. The returned json's key has been named 'titles'",
             },
         ],
     )
@@ -123,8 +126,7 @@ def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
 
 def collate_text(content_dict: str, company_name: str) -> str:
     final_response = openai.chat.completions.create(
-        # model="gpt-4-1106-preview",
-        model="gpt-3.5-turbo-1106",
+        model=OPENAI_MODEL,
         messages=[
             {
                 "role": "system",
@@ -142,7 +144,7 @@ def collate_text(content_dict: str, company_name: str) -> str:
             {"role": "assistant", "content": "I will start to analyze."},
             {
                 "role": "user",
-                "content": f"Analyzing the provided news articles for ESG impact. Summarize the key findings, give the {company_name}'s pros ,cons, final summary, and you have to give the related article's link finding to prove th summary at the end, and must translate the summary and all the text presenting into Traditional Chinese for a comprehensive evaluation and you just need to show the words after translated, no words in English.",
+                "content": f"Analyzing the provided news articles for ESG impact. Summarize the key findings, give the {company_name}'s pros ,cons, final summary, and you have to give the related article's title to prove it with using '(ref:title)' tag, and must translate all the text except the ref tag presenting into Traditional Chinese for a comprehensive evaluation and you just need to show the words after translated, no words in English.",
             },
         ],
     )
@@ -171,5 +173,44 @@ async def parse_contents(title_dict: dict):
 
         for title, article in responses:
             results[title] = article
-
     return results
+
+
+def re_content_title_to_url(content: str, title_dict: dict) -> str:
+    def replace_with_dict(match):
+        key = match.group(1)  # 獲取捕獲組匹配的文本
+        return title_dict.get(key, "unknown")
+
+    pattern = r"\(ref:(.+?)\)"
+    new_content = re.sub(pattern, replace_with_dict, content)
+    return new_content
+
+
+def ask_company_question(content: str, question: str) -> str:
+    final_response = openai.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": "Assistant is a helper trained to analyze and evaluate ESG-related news.",
+            },
+            {
+                "role": "user",
+                "content": f"I have several ESG news articles. Please analyze and ready to ask my question.",
+            },
+            {"role": "assistant", "content": "Please provide the news content."},
+            {
+                "role": "user",
+                "content": content,
+            },
+            {
+                "role": "assistant",
+                "content": "I will start to analyze the content and ready to ask your question.",
+            },
+            {
+                "role": "user",
+                "content": question,
+            },
+        ],
+    )
+    return final_response.choices[0].message.content
