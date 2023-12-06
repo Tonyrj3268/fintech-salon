@@ -150,13 +150,19 @@ def collate_text(content_dict: str, company_name: str) -> str:
 
 
 async def fetch_url(session, title, url, api_key):
-    async with session.post(
-        "https://autoextract.scrapinghub.com/v1/extract",
-        auth=aiohttp.BasicAuth(api_key, ""),
-        json=[{"url": url, "pageType": "article"}],
-    ) as response:
-        article = await response.json()
-        return title, article[0]["article"]["articleBody"]
+    try:
+        async with session.post(
+            "https://autoextract.scrapinghub.com/v1/extract",
+            auth=aiohttp.BasicAuth(api_key, ""),
+            json=[{"url": url, "pageType": "article"}],
+        ) as response:
+            if response.status == 200:
+                article = await response.json()
+                return title, article[0]["article"]["articleBody"]
+            else:
+                return title, None
+    except Exception as e:
+        return title, None
 
 
 async def parse_contents(title_dict: dict):
@@ -169,14 +175,16 @@ async def parse_contents(title_dict: dict):
         responses = await asyncio.gather(*tasks)
 
         for title, article in responses:
-            results[title] = article
+            if article:
+                results[title] = article
     return results
 
 
 def re_content_title_to_url(content: str, title_dict: dict) -> str:
     def replace_with_dict(match):
         key = match.group(1)  # 獲取捕獲組匹配的文本
-        return title_dict.get(key, "unknown")
+        replacement = title_dict.get(key, "unknown")
+        return f"(ref:{replacement})"
 
     pattern = r"\(ref:(.+?)\)"
     new_content = re.sub(pattern, replace_with_dict, content)
