@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 import json
-from .utils import (
+from utils import (
     fetch_both_sources,
     filter_news_with_ESG,
     parse_contents,
@@ -9,11 +9,11 @@ from .utils import (
     ask_company_question,
 )
 from dotenv import load_dotenv
-from .db import Base, engine, get_db, Company
+from db import Base, engine, get_db, Company
 from sqlalchemy.orm import Session
 
 # 加载 .env 文件
-load_dotenv(dotenv_path=".env")
+load_dotenv(dotenv_path=".env", verbose=True)
 
 app = FastAPI()
 
