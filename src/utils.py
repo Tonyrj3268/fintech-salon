@@ -5,9 +5,6 @@ import os
 import openai
 import re
 
-OPENAI_MODEL = "gpt-4-1106-preview"
-# OPENAI_MODEL = "gpt-3.5-turbo-1106"
-
 
 async def get_esg_from_bing_news(
     company_name: str, api_key: str, count: int = 30
@@ -101,7 +98,7 @@ def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
     response = openai.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=os.getenv("OPENAI_MODEL"),
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": "Assistant is a ESG professional."},
@@ -126,7 +123,7 @@ def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
 
 def collate_text(content_dict: str, company_name: str) -> str:
     final_response = openai.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=os.getenv("OPENAI_MODEL"),
         messages=[
             {
                 "role": "system",
@@ -188,7 +185,7 @@ def re_content_title_to_url(content: str, title_dict: dict) -> str:
 
 def ask_company_question(content: str, question: str) -> str:
     final_response = openai.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=os.getenv("OPENAI_MODEL"),
         messages=[
             {
                 "role": "system",
