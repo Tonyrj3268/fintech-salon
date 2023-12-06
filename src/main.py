@@ -58,7 +58,19 @@ async def create_company(company_name: str, content: str, db: Session):
     return new_company
 
 
-@app.get("/companies/{company_name}")
+@app.get("/all_companies")
+async def get_content(db: Session = Depends(get_db)):
+    companies = db.query(Company).all()
+    return [
+        {
+            "company_name": company.company_name,
+            "created_date": company.created_date,
+        }
+        for company in companies
+    ]
+
+
+@app.get("/all_companies/{company_name}")
 async def get_content(company_name: str, db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.company_name == company_name).first()
     if company is None:

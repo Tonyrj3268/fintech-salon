@@ -10,7 +10,7 @@ OPENAI_MODEL = "gpt-4-1106-preview"
 
 
 async def get_esg_from_bing_news(
-    company_name: str, api_key: str, count: int = 10
+    company_name: str, api_key: str, count: int = 30
 ) -> dict:
     if api_key is None:
         raise Exception("No Bing News API key provided.")
