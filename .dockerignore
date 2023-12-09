@@ -5,3 +5,4 @@ __pycache__
 .git
 .gitignore
 .venv
+.DS_Store

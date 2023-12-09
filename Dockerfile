@@ -4,6 +4,16 @@ FROM python:3.10
 # 設定工作目錄
 WORKDIR /app
 
+# 安裝 wget 和解壓縮工具
+RUN apt-get update && apt-get install -y wget unzip
+
+# 下載並安裝 ngrok
+RUN wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip \
+    && unzip ngrok-stable-linux-amd64.zip \
+    && rm ngrok-stable-linux-amd64.zip \
+    && mv ngrok /usr/local/bin \
+    && chmod +x /usr/local/bin/ngrok
+
 # 複製依賴文件
 COPY requirements.txt ./
 

@@ -15,6 +15,8 @@ bs4 = "^0.0.1"
 aiohttp = "^3.9.1"
 python-dotenv = "^1.0.0"
 sqlalchemy = "^2.0.23"
+pymupdf = "^1.23.7"
+python-multipart = "^0.0.6"
 
 
 [build-system]

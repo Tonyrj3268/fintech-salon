@@ -4,6 +4,9 @@ import aiohttp
 import os
 import openai
 import re
+import fitz
+from fastapi import UploadFile
+import random
 
 
 async def get_esg_from_bing_news(
@@ -62,7 +65,7 @@ async def parse_page(html: str) -> dict:
 
 async def get_esg_from_tianxia_news(company_name: str) -> dict:
     base_url = "https://www.cw.com.tw/"
-    search_url = f"{base_url}search/doSearch.action?key={company_name}+永續&page="
+    search_url = f"{base_url}search/doSearch.action?key={company_name}&page="
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
     }
@@ -94,17 +97,17 @@ async def fetch_both_sources(company_name: str) -> dict:
     return bing_res_dict
 
 
-def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
+async def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
     response = openai.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL"),
+        model="gpt-3.5-turbo-1106",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": "Assistant is a ESG professional."},
             {
                 "role": "user",
-                "content": f"Here are some news titles. Please identify which ones are related to ESG (Environmental, Social, and Governance) or Sustainable, and the title must have {company_name}.",
+                "content": f"Here are some news titles. Please identify which ones are related to ESG (Environmental, Social, and Governance) or Sustainable, and the title must be about {company_name}.",
             },
             {"role": "assistant", "content": "Please provide the news titles."},
             {
@@ -121,9 +124,9 @@ def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
     return response.choices[0].message.content
 
 
-def collate_text(content_dict: str, company_name: str) -> str:
+async def collate_text(content_dict: str, company_name: str) -> str:
     final_response = openai.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL"),
+        model="gpt-4-1106-preview",
         messages=[
             {
                 "role": "system",
@@ -131,7 +134,7 @@ def collate_text(content_dict: str, company_name: str) -> str:
             },
             {
                 "role": "user",
-                "content": f"I have several ESG news articles. Please find the content and provide an evaluation for these in terms of their impact on environmental, social, and governance aspects. Please consider news from reputable sources.",
+                "content": f"I have several ESG news articles. Please find the content and provide an evaluation for these in terms of their impact on environmental, social, and governance aspects.",
             },
             {"role": "assistant", "content": "Please provide the news content."},
             {
@@ -141,7 +144,7 @@ def collate_text(content_dict: str, company_name: str) -> str:
             {"role": "assistant", "content": "I will start to analyze."},
             {
                 "role": "user",
-                "content": f"Analyzing the provided news articles for ESG impact. Summarize the key findings, give the {company_name}'s pros ,cons, final summary, and you have to give the related article's title to prove it with using '(ref:title)' tag, and must translate all the text except the ref tag presenting into Traditional Chinese for a comprehensive evaluation and you just need to show the words after translated, no words in English.",
+                "content": f"Summarize your main findings, the longer the better, give the {company_name}'s pros ,cons, final summary, and you have to give the related article's title to prove it with using '(ref:title)' tag, and must translate all the text except the ref tag presenting into Traditional Chinese for a comprehensive evaluation and you just need to show the words after translated, no words in English.",
             },
         ],
     )
@@ -162,6 +165,7 @@ async def fetch_url(session, title, url, api_key):
             else:
                 return title, None
     except Exception as e:
+        print(e)
         return title, None
 
 
@@ -183,7 +187,7 @@ async def parse_contents(title_dict: dict):
 def re_content_title_to_url(content: str, title_dict: dict) -> str:
     def replace_with_dict(match):
         key = match.group(1)  # 獲取捕獲組匹配的文本
-        replacement = title_dict.get(key, "unknown")
+        replacement = title_dict.get(key, key)
         return f"(ref:{replacement})"
 
     pattern = r"\(ref:(.+?)\)"
@@ -219,3 +223,50 @@ def ask_company_question(content: str, question: str) -> str:
         ],
     )
     return final_response.choices[0].message.content
+
+
+async def summarize_article(content: str) -> str:
+    final_response = openai.chat.completions.create(
+        model="gpt-3.5-turbo-1106",
+        messages=[
+            {
+                "role": "system",
+                "content": "Assistant is a specialized GPT designed to analyze news articles and identify content related to Environmental, Social, and Governance (ESG) topics.",
+            },
+            {
+                "role": "user",
+                "content": f"I have one ESG news articles. Please analyze and translate them into Traditional Chinese and make it shorter. Remember I only need the ESG relevance.",
+            },
+            {"role": "assistant", "content": "Please provide the news content."},
+            {
+                "role": "user",
+                "content": content,
+            },
+        ],
+    )
+    return final_response.choices[0].message.content
+
+
+async def extract_text_from_pdf(pdf_file: UploadFile) -> str:
+    final_content = ""
+    try:
+        file_name = os.path.join("temp", pdf_file.filename)
+        with open(file_name, "wb") as file:
+            content = await pdf_file.read()
+            file.write(content)
+
+        with fitz.open(file_name) as doc:
+            text = ""
+            for page in doc:
+                text += page.get_text()
+        text = re.sub(r"[^\u4e00-\u9fa5。，]", "", text)
+        lines = text.split("。")
+        number_of_lines_to_select = 50
+        number_of_lines_to_select = min(number_of_lines_to_select, len(lines))
+        selected_lines = random.sample(lines, number_of_lines_to_select)
+        final_content = "。".join(selected_lines)
+    except Exception as e:
+        print(e)
+    finally:
+        os.remove(file_name)
+    return final_content
