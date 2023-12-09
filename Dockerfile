@@ -8,11 +8,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y wget unzip
 
 # 下載並安裝 ngrok
-RUN wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip \
-    && unzip ngrok-stable-linux-amd64.zip \
-    && rm ngrok-stable-linux-amd64.zip \
-    && mv ngrok /usr/local/bin \
-    && chmod +x /usr/local/bin/ngrok
+RUN curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null \
+    && echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list \
+    && apt-get update \
+    && apt-get install -y ngrok \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # 複製依賴文件
 COPY requirements.txt ./
