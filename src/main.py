@@ -8,6 +8,8 @@ from utils import (
     re_content_title_to_url,
     ask_company_question,
     extract_text_from_pdf,
+    ask_esg_question,
+    set_openai_params,
 )
 from dotenv import load_dotenv
 from db import Base, engine, get_db, Company
@@ -29,6 +31,8 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
+set_openai_params()
+
 
 @app.post("/company")
 async def get_company(
@@ -42,9 +46,16 @@ async def get_company(
     elif company and pdf_file:
         if company.pdf_file_name != pdf_file.filename:
             pdf_text = await extract_text_from_pdf(pdf_file)
-            company = Company.update_pdf(company_name, pdf_file.filename, pdf_text, db)
-            # TODO update summary
-        return {"content": company.summary}
+            pdf_dict = {"Sustainability_Report": pdf_text}
+            parse_content_dict = Company.get_parsed_content(company_name, db)
+            parse_content_dict.update(pdf_dict)
+            content_collated = await collate_text(parse_content_dict, company_name)
+            final_content = re_content_title_to_url(
+                content_collated, title_dict_filtered
+            )
+            Company.update_pdf(company_name, pdf_file.filename, pdf_text, db)
+            Company.update_summary(company_name, final_content, db)
+        return {"content": final_content}
     elif company is None and pdf_file:
         pdf_text = await extract_text_from_pdf(pdf_file)
         pdf_dict = {"Sustainability_Report": pdf_text}
@@ -79,12 +90,25 @@ async def get_company(
     return {"content": final_content}
 
 
-@app.get("/ask/{company_name}")
+@app.get("/ask/any/{company_name}")
 async def get_company(company_name: str, question: str, db: Session = Depends(get_db)):
-    parsed_content = await get_parsed_content(company_name, db)
-    if parsed_content is None:
+    parsed_content = await Company.get_parsed_content(company_name, db)
+    pdf_content = await Company.get_pdf_content(company_name, db)
+    if parsed_content is None and pdf_content is None:
         return {"content": "No content"}
-    ask = ask_company_question(parsed_content, question)
+    merged_content = {**parsed_content, **pdf_content}
+    ask = ask_company_question(merged_content, question)
+    return {"content": ask}
+
+
+@app.get("/ask/esg/{company_name}")
+async def get_company(company_name: str, question: str, db: Session = Depends(get_db)):
+    parsed_content = await Company.get_parsed_content(company_name, db)
+    pdf_content = await Company.get_pdf_content(company_name, db)
+    if parsed_content is None and pdf_content is None:
+        return {"content": "No content"}
+    merged_content = {**parsed_content, **pdf_content}
+    ask = ask_esg_question(merged_content, question)
     return {"content": ask}
 
 
@@ -102,4 +126,9 @@ async def get_all_companies(db: Session = Depends(get_db)):
 
 @app.get("/all_companies/{company_name}")
 async def get_parsed_content(company_name: str, db: Session = Depends(get_db)):
-    return Company.get_parsed_content(company_name, db)
+    parsed_content = await Company.get_parsed_content(company_name, db)
+    pdf_content = await Company.get_pdf_content(company_name, db)
+    if parsed_content is None and pdf_content is None:
+        return {"content": "No content"}
+    merged_content = {**parsed_content, **pdf_content}
+    return merged_content

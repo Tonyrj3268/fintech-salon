@@ -45,6 +45,12 @@ class Company(Base):
         return db.query(cls).filter(cls.company_name == company_name).first().summary
 
     @classmethod
+    def get_pdf_content(cls, company_name: str, db: Session):
+        return (
+            db.query(cls).filter(cls.company_name == company_name).first().pdf_content
+        )
+
+    @classmethod
     def get_parsed_content(cls, company_name: str, db: Session):
         return (
             db.query(cls)
@@ -82,6 +88,14 @@ class Company(Base):
         company = db.query(cls).filter(cls.company_name == company_name).first()
         company.pdf_file_name = pdf_file_name
         company.pdf_content = pdf_content
+        db.commit()
+        db.refresh(company)
+        return company
+
+    @classmethod
+    def update_summary(cls, company_name, summary: str, db: Session):
+        company = db.query(cls).filter(cls.company_name == company_name).first()
+        company.summary = summary
         db.commit()
         db.refresh(company)
         return company

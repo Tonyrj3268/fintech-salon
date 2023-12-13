@@ -7,6 +7,14 @@ import re
 import fitz
 from fastapi import UploadFile
 import random
+from question import esg_question
+
+
+def set_openai_params():
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    openai.api_version = os.getenv("OPENAI_API_VERSION")
+    openai.api_type = os.getenv("OPENAI_API_TYPE")
+    openai.api_base = os.getenv("OPENAI_API_BASE")
 
 
 async def get_esg_from_bing_news(
@@ -98,11 +106,29 @@ async def fetch_both_sources(company_name: str) -> dict:
 
 
 async def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-
-    response = openai.chat.completions.create(
-        model="gpt-3.5-turbo-1106",
-        response_format={"type": "json_object"},
+    # response = openai.chat.completions.create(
+    #     model="gpt-3.5-turbo-1106",
+    #     response_format={"type": "json_object"},
+    #     messages=[
+    #         {"role": "system", "content": "Assistant is a ESG professional."},
+    #         {
+    #             "role": "user",
+    #             "content": f"Here are some news titles. Please identify which ones are related to ESG (Environmental, Social, and Governance) or Sustainable, and the title must be about {company_name}.",
+    #         },
+    #         {"role": "assistant", "content": "Please provide the news titles."},
+    #         {
+    #             "role": "user",
+    #             "content": str(res_list),
+    #         },
+    #         {"role": "assistant", "content": "I will start to identify and analyze."},
+    #         {
+    #             "role": "user",
+    #             "content": f"Give me the json of titles for ESG relevance and must have {company_name}. The returned json's key has been named 'titles'",
+    #         },
+    #     ],
+    # )
+    response = openai.ChatCompletion.create(
+        engine="gpt35",
         messages=[
             {"role": "system", "content": "Assistant is a ESG professional."},
             {
@@ -120,13 +146,37 @@ async def filter_news_with_ESG(company_name: str, res_list: list) -> dict:
                 "content": f"Give me the json of titles for ESG relevance and must have {company_name}. The returned json's key has been named 'titles'",
             },
         ],
+        temperature=0.0,
     )
     return response.choices[0].message.content
 
 
 async def collate_text(content_dict: str, company_name: str) -> str:
-    final_response = openai.chat.completions.create(
-        model="gpt-4-1106-preview",
+    # final_response = openai.chat.completions.create(
+    #     model="gpt-4-1106-preview",
+    #     messages=[
+    #         {
+    #             "role": "system",
+    #             "content": "Assistant is a sophisticated AI trained to analyze and evaluate ESG-related news.",
+    #         },
+    #         {
+    #             "role": "user",
+    #             "content": f"I have several ESG news articles. Please find the content and provide an evaluation for these in terms of their impact on environmental, social, and governance aspects.",
+    #         },
+    #         {"role": "assistant", "content": "Please provide the news content."},
+    #         {
+    #             "role": "user",
+    #             "content": f"Here are the news articles: {str(content_dict)}. Please pay attention to key environmental, social, and governance factors, consider any notable events or controversies, and record the event's information, like a specific time, occasion, or circumstance.",
+    #         },
+    #         {"role": "assistant", "content": "I will start to analyze."},
+    #         {
+    #             "role": "user",
+    #             "content": f"Summarize your main findings, the longer the better, give the {company_name}'s pros ,cons, final summary, and you have to give the related article's title to prove it with using '(ref:title)' tag, and must translate all the text except the ref tag presenting into Traditional Chinese for a comprehensive evaluation and you just need to show the words after translated, no words in English.",
+    #         },
+    #     ],
+    # )
+    response = openai.ChatCompletion.create(
+        engine="gpt4-32k",
         messages=[
             {
                 "role": "system",
@@ -147,9 +197,10 @@ async def collate_text(content_dict: str, company_name: str) -> str:
                 "content": f"Summarize your main findings, the longer the better, give the {company_name}'s pros ,cons, final summary, and you have to give the related article's title to prove it with using '(ref:title)' tag, and must translate all the text except the ref tag presenting into Traditional Chinese for a comprehensive evaluation and you just need to show the words after translated, no words in English.",
             },
         ],
+        temperature=0.0,
     )
 
-    return final_response.choices[0].message.content
+    return response.choices[0].message.content
 
 
 async def fetch_url(session, title, url, api_key):
@@ -196,8 +247,34 @@ def re_content_title_to_url(content: str, title_dict: dict) -> str:
 
 
 def ask_company_question(content: str, question: str) -> str:
-    final_response = openai.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL"),
+    # final_response = openai.chat.completions.create(
+    #     model=os.getenv("OPENAI_MODEL"),
+    #     messages=[
+    #         {
+    #             "role": "system",
+    #             "content": "Assistant is a helper trained to analyze and evaluate ESG-related news.",
+    #         },
+    #         {
+    #             "role": "user",
+    #             "content": f"I have several ESG news articles. Please analyze and ready to ask my question.",
+    #         },
+    #         {"role": "assistant", "content": "Please provide the news content."},
+    #         {
+    #             "role": "user",
+    #             "content": content,
+    #         },
+    #         {
+    #             "role": "assistant",
+    #             "content": "I will start to analyze the content and ready to ask your question.",
+    #         },
+    #         {
+    #             "role": "user",
+    #             "content": question,
+    #         },
+    #     ],
+    # )
+    response = openai.ChatCompletion.create(
+        engine="gpt4-32k",
         messages=[
             {
                 "role": "system",
@@ -221,30 +298,66 @@ def ask_company_question(content: str, question: str) -> str:
                 "content": question,
             },
         ],
+        temperature=0.0,
     )
-    return final_response.choices[0].message.content
+    return response.choices[0].message.content
 
 
-async def summarize_article(content: str) -> str:
-    final_response = openai.chat.completions.create(
-        model="gpt-3.5-turbo-1106",
+def ask_esg_question(content: str) -> str:
+    # final_response = openai.chat.completions.create(
+    #     model="gpt-4-1106-preview",
+    #     messages=[
+    #         {
+    #             "role": "system",
+    #             "content": "Assistant is a helper trained to analyze and evaluate ESG-related question.",
+    #         },
+    #         {
+    #             "role": "user",
+    #             "content": f"I have several ESG articles. Please analyze and ask my question.You should use json format to answer each question with the key 'answer' which value only contains 'Yes','No','Unknown',and there is another key named 'Source', you should give me the answer where you find.",
+    #         },
+    #         {"role": "assistant", "content": "Please provide the articles content."},
+    #         {
+    #             "role": "user",
+    #             "content": content,
+    #         },
+    #         {
+    #             "role": "assistant",
+    #             "content": "I will start to analyze the content and ask your question.",
+    #         },
+    #         {
+    #             "role": "user",
+    #             "content": str(esg_question),
+    #         },
+    #     ],
+    # )
+    response = openai.ChatCompletion.create(
+        engine="gpt4-32k",
         messages=[
             {
                 "role": "system",
-                "content": "Assistant is a specialized GPT designed to analyze news articles and identify content related to Environmental, Social, and Governance (ESG) topics.",
+                "content": "Assistant is a helper trained to analyze and evaluate ESG-related question.",
             },
             {
                 "role": "user",
-                "content": f"I have one ESG news articles. Please analyze and translate them into Traditional Chinese and make it shorter. Remember I only need the ESG relevance.",
+                "content": f"I have several ESG articles. Please analyze and ask my question.You should use json format to answer each question with the key 'answer' which value only contains 'Yes','No','Unknown',and there is another key named 'Source', you should give me the answer where you find.",
             },
-            {"role": "assistant", "content": "Please provide the news content."},
+            {"role": "assistant", "content": "Please provide the articles content."},
             {
                 "role": "user",
                 "content": content,
             },
+            {
+                "role": "assistant",
+                "content": "I will start to analyze the content and ask your question.",
+            },
+            {
+                "role": "user",
+                "content": str(esg_question),
+            },
         ],
+        temperature=0.0,
     )
-    return final_response.choices[0].message.content
+    return response.choices[0].message.content
 
 
 async def extract_text_from_pdf(pdf_file: UploadFile) -> str:
